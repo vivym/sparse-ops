@@ -43,7 +43,6 @@ void voxelize_sparse(
         points_ptr, batch_indices_ptr, points.size(0),                    \
         voxel_size_vec, points_range_min_vec, points_range_max_vec);      \
     voxel_coords = voxel_coords.slice(0, 0, num_voxels);                  \
-    voxel_indices = voxel_indices.slice(0, 0, num_voxels);                \
     voxel_batch_indices = voxel_batch_indices.slice(0, 0, num_voxels);    \
   } break;
   CASE(1)
