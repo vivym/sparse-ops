@@ -11,7 +11,8 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor> voxelize(
     at::Tensor points_range_max) {
   if (batch_indices.has_value()) {
     TORCH_CHECK(points.dim() == 2, "The points must be a 2D tensor.");
-    TORCH_CHECK(batch_indices.value().dim() == 1, "The batch_indices must be a 1D tensor.");
+    TORCH_CHECK(batch_indices.value().dim() == 1,
+                "The batch_indices must be a 1D tensor.");
   } else {
     TORCH_CHECK(points.dim() == 3, "The points must be a 3D tensor.");
   }
