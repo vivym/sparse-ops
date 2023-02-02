@@ -31,12 +31,12 @@ void voxelize_sparse(
   switch (points.size(1)) {
 #define CASE(NDIM)                                                        \
   case NDIM: {                                                            \
-    const FixedVec<scalar_t, NDIM> voxel_size_vec(                        \
-        voxel_size.data_ptr<scalar_t>());                                 \
-    const FixedVec<scalar_t, NDIM> points_range_min_vec(                  \
-        points_range_min.data_ptr<scalar_t>());                           \
-    const FixedVec<scalar_t, NDIM> points_range_max_vec(                  \
-        points_range_max.data_ptr<scalar_t>());                           \
+    FixedVec<scalar_t, NDIM> voxel_size_vec;                              \
+    voxel_size_vec.load(voxel_size.data_ptr<scalar_t>());                 \
+    FixedVec<scalar_t, NDIM> points_range_min_vec;                        \
+    points_range_min_vec.load(points_range_min.data_ptr<scalar_t>());     \
+    FixedVec<scalar_t, NDIM> points_range_max_vec;                        \
+    points_range_max_vec.load(points_range_max.data_ptr<scalar_t>());     \
     auto num_voxels = thrust_impl::voxelize<scalar_t, index_t, NDIM>(     \
         policy, voxel_coords_ptr, voxel_indices_ptr,                      \
         voxel_batch_indices_ptr, voxel_point_indices_ptr,                 \
@@ -80,7 +80,7 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor> voxelize(
   at::Tensor voxel_batch_indices = at::empty({num_points}, indices_options);
   at::Tensor voxel_point_indices = at::empty({num_points}, indices_options);
 
-  AT_DISPATCH_FLOATING_TYPES(points.type(), "sparse_ops::voxelize::cuda::voxelize", [&] {
+  AT_DISPATCH_FLOATING_TYPES_AND_HALF(points.type(), "sparse_ops::voxelize::cuda::voxelize", [&] {
     if (batch_indices.has_value()) {
       voxelize_sparse<scalar_t, int64_t>(
           voxel_coords, voxel_indices, voxel_batch_indices, voxel_point_indices,

@@ -4,6 +4,9 @@
 #include <array>
 
 #ifdef __CUDACC__
+#include <cuda_fp16.h>
+#include <c10/util/Half.h>
+
 #define FN_SPECIFIERS inline __host__ __device__
 #else
 #define FN_SPECIFIERS inline
@@ -14,11 +17,29 @@ namespace sparse_ops {
 template <typename scalar_t, std::size_t kDim>
 class FixedVec : public std::array<scalar_t, kDim> {
 public:
-  FN_SPECIFIERS
-  FixedVec() = default;
+  // FN_SPECIFIERS
+  // FixedVec() = default;
 
+  // FN_SPECIFIERS
+  // FixedVec(const FixedVec<scalar_t, kDim>&) = default;
+
+  // FN_SPECIFIERS
+  // FixedVec(FixedVec<scalar_t, kDim>&&) = default;
+
+  // FN_SPECIFIERS
+  // void operator = (const FixedVec<scalar_t, kDim>&) = default;
+
+  // FN_SPECIFIERS
+  // void operator = (FixedVec<scalar_t, kDim>&&) = default;
+
+  // FN_SPECIFIERS
+  // explicit FixedVec(const scalar_t* const ptr) {
+  //   for (int i = 0; i < kDim; ++i) {
+  //     this->operator[](i) = ptr[i];
+  //   }
+  // }
   FN_SPECIFIERS
-  explicit FixedVec(const scalar_t* const ptr) {
+  void load(const scalar_t* const ptr) {
     for (int i = 0; i < kDim; ++i) {
       this->operator[](i) = ptr[i];
     }
@@ -114,6 +135,46 @@ FN_SPECIFIERS FixedVec<double, kDim> ceil(const FixedVec<double, kDim>& v) {
   }
   return res;
 }
+
+#ifdef __CUDACC__
+
+template <std::size_t kDim>
+FN_SPECIFIERS FixedVec<__half, kDim> floor(const FixedVec<__half, kDim>& v) {
+  FixedVec<__half, kDim> res;
+  for (int i = 0; i < kDim; ++i) {
+    res[i] = hfloor(v[i]);
+  }
+  return res;
+}
+
+template <std::size_t kDim>
+FN_SPECIFIERS FixedVec<__half, kDim> ceil(const FixedVec<__half, kDim>& v) {
+  FixedVec<__half, kDim> res;
+  for (int i = 0; i < kDim; ++i) {
+    res[i] = hceil(v[i]);
+  }
+  return res;
+}
+
+template <std::size_t kDim>
+FN_SPECIFIERS FixedVec<c10::Half, kDim> floor(const FixedVec<c10::Half, kDim>& v) {
+  FixedVec<c10::Half, kDim> res;
+  for (int i = 0; i < kDim; ++i) {
+    res[i] = hfloor(v[i]);
+  }
+  return res;
+}
+
+template <std::size_t kDim>
+FN_SPECIFIERS FixedVec<c10::Half, kDim> ceil(const FixedVec<c10::Half, kDim>& v) {
+  FixedVec<c10::Half, kDim> res;
+  for (int i = 0; i < kDim; ++i) {
+    res[i] = hceil(v[i]);
+  }
+  return res;
+}
+
+#endif
 
 template <typename scalar_t, std::size_t kDim>
 FN_SPECIFIERS FixedVec<scalar_t, kDim> operator- (const FixedVec<scalar_t, kDim>& v) {

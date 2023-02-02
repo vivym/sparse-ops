@@ -33,7 +33,8 @@ void compute_voxel_coords_and_indices(
       thrust::counting_iterator<index_t>(0),
       thrust::counting_iterator<index_t>(num_points),
       [=] __host__ __device__ (index_t i) {
-        FixedVec<scalar_t, kDim> p(points_ptr + i * kDim);
+        FixedVec<scalar_t, kDim> p;
+        p.load(points_ptr + i * kDim);
         if ((p >= points_range_min && p <= points_range_max).all()) {
           auto voxel_coord = ((p - points_range_min) / voxel_size)
                                   .template cast<index_t>();
