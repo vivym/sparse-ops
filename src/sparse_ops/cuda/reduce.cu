@@ -62,7 +62,7 @@ void reduce_by_key_impl(
   switch (values.size(1)) {
 #define CASE(NDIM)                                                                        \
   case NDIM: {                                                                            \
-    int64_t num_segments;                                                                 \
+    int64_t num_segments = 0;                                                             \
     switch (op) {                                                                         \
     case 0:                                                                               \
       num_segments = thrust_impl::reduce_by_key<scalar_t, index_t, NDIM>(                 \
@@ -98,7 +98,7 @@ at::Tensor reduce_by_key(at::Tensor values, at::Tensor keys, int64_t op) {
   TORCH_CHECK(values.is_cuda(), "The values must be a CUDA tensor.");
   TORCH_CHECK(keys.is_cuda(), "The keys must be a CUDA tensor.");
 
-  at::Tensor results = at::empty_like(values);
+  auto results = at::empty_like(values);
 
   AT_DISPATCH_FLOATING_TYPES_AND_HALF(values.type(), "sparse_ops::reduce::cuda::reduce_by_key", [&] {
     reduce_by_key_impl<scalar_t, int64_t>(results, values, keys, op);

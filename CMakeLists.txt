@@ -17,4 +17,15 @@ find_library(TORCH_PYTHON_LIBRARY torch_python REQUIRED PATHS "${TORCH_INSTALL_P
 # cuda
 find_package(CUDAToolkit REQUIRED)
 
+include(cmake/CPM.cmake)
+
+CPMAddPackage(
+  NAME bght
+  GITHUB_REPOSITORY owensgroup/BGHT
+  GIT_TAG main
+  OPTIONS
+      "build_tests OFF"
+      "build_benchmarks OFF"
+)
+
 add_subdirectory(src/sparse_ops)

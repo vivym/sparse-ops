@@ -1,5 +1,6 @@
 #pragma once
 
+#include <thrust/transform.h>
 #include <thrust/for_each.h>
 #include <thrust/memory.h>
 #include <thrust/sequence.h>

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <tuple>
 #include <torch/types.h>
 
 namespace sparse_ops::reduce {

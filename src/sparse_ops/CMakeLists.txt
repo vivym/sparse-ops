@@ -19,10 +19,11 @@ target_include_directories(${MODULE_NAME} PRIVATE
   "${PROJECT_SOURCE_DIR}/include"
 )
 
-target_link_libraries(${MODULE_NAME}
+target_link_libraries(${MODULE_NAME} PRIVATE
   ${TORCH_LIBRARIES}
   ${TORCH_PYTHON_LIBRARY}
   CUDA::cublas
+  bght
 )
 
 target_compile_options(${MODULE_NAME} PRIVATE

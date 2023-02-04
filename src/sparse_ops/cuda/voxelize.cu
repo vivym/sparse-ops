@@ -2,18 +2,19 @@
 #include <thrust/execution_policy.h>
 #include "sparse_ops/voxelize.h"
 #include "sparse_ops/thrust/voxelize.hpp"
+#include "sparse_ops/thrust/misc.hpp"
 #include "sparse_ops/thrust_allocator.h"
 
 namespace sparse_ops::voxelize::cuda {
 
 template <typename scalar_t, typename index_t>
-void voxelize_sparse(
+void voxelize_impl(
     at::Tensor& voxel_coords,
     at::Tensor& voxel_indices,
     at::Tensor& voxel_batch_indices,
     at::Tensor& voxel_point_indices,
     const at::Tensor& points,
-    const at::Tensor& batch_indices,
+    c10::optional<at::Tensor> batch_indices,
     const at::Tensor& voxel_size,
     const at::Tensor& points_range_min,
     const at::Tensor& points_range_max) {
@@ -25,8 +26,19 @@ void voxelize_sparse(
   auto voxel_batch_indices_ptr = voxel_batch_indices.data_ptr<index_t>();
   auto voxel_point_indices_ptr = voxel_point_indices.data_ptr<index_t>();
 
+  if (!batch_indices.has_value()) {
+    auto batch_size = points.size(0);
+    auto num_points = points.size(1);
+
+    auto indices_options = points.options().dtype(at::kLong);
+    auto tmp = at::empty({batch_size, num_points}, indices_options);
+    sparse_ops::thrust_impl::generate_batch_indices<index_t>(
+        policy, tmp.data_ptr<index_t>(), batch_size, num_points);
+    batch_indices.value() = tmp;
+  }
+
   const auto* const points_ptr = points.data_ptr<scalar_t>();
-  const auto* const batch_indices_ptr = batch_indices.data_ptr<index_t>();
+  const auto* const batch_indices_ptr = batch_indices.value().data_ptr<index_t>();
 
   switch (points.size(1)) {
 #define CASE(NDIM)                                                        \
@@ -67,6 +79,7 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor> voxelize(
 
   if (batch_indices.has_value()) {
     TORCH_CHECK(batch_indices.value().is_cuda(), "The batch_indices must be a CUDA tensor.");
+    batch_indices.value() = batch_indices.value().contiguous();
   }
 
   auto num_points = batch_indices.has_value()
@@ -75,19 +88,16 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor> voxelize(
   auto point_dim = points.size(-1);
 
   auto indices_options = points.options().dtype(at::kLong);
-  at::Tensor voxel_coords = at::empty({num_points, point_dim}, indices_options);
-  at::Tensor voxel_indices = at::empty({num_points}, indices_options);
-  at::Tensor voxel_batch_indices = at::empty({num_points}, indices_options);
-  at::Tensor voxel_point_indices = at::empty({num_points}, indices_options);
+  auto voxel_coords = at::empty({num_points, point_dim}, indices_options);
+  auto voxel_indices = at::empty({num_points}, indices_options);
+  auto voxel_batch_indices = at::empty({num_points}, indices_options);
+  auto voxel_point_indices = at::empty({num_points}, indices_options);
 
   AT_DISPATCH_FLOATING_TYPES_AND_HALF(points.type(), "sparse_ops::voxelize::cuda::voxelize", [&] {
-    if (batch_indices.has_value()) {
-      voxelize_sparse<scalar_t, int64_t>(
-          voxel_coords, voxel_indices, voxel_batch_indices, voxel_point_indices,
-          points.contiguous(), batch_indices.value().contiguous(), voxel_size.contiguous(),
-          points_range_min.contiguous(), points_range_max.contiguous());
-    } else {
-    }
+    voxelize_impl<scalar_t, int64_t>(
+        voxel_coords, voxel_indices, voxel_batch_indices, voxel_point_indices,
+        points.contiguous(), batch_indices, voxel_size.contiguous(),
+        points_range_min.contiguous(), points_range_max.contiguous());
   });
 
   return {voxel_coords, voxel_indices, voxel_batch_indices, voxel_point_indices};
