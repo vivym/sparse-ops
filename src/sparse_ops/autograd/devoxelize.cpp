@@ -14,13 +14,14 @@ public:
       const torch::autograd::Variable& points_range_max,
       const torch::autograd::Variable& voxel_coords,
       const torch::autograd::Variable& voxel_features,
-      const torch::autograd::Variable& voxel_batch_indices) {
+      const torch::autograd::Variable& voxel_batch_indices,
+      double hash_table_load_factor) {
     ctx->saved_data["num_voxels"] = voxel_coords.size(0);
 
     at::AutoDispatchBelowADInplaceOrView g;
     auto [point_features, indices, weights] = trilinear_devoxelize(
         points, batch_indices, voxel_size, points_range_min, points_range_max,
-        voxel_coords, voxel_features, voxel_batch_indices);
+        voxel_coords, voxel_features, voxel_batch_indices, hash_table_load_factor);
 
     ctx->save_for_backward({indices, weights});
 
@@ -43,7 +44,7 @@ public:
 
     return {
         at::Tensor(), at::Tensor(), at::Tensor(), at::Tensor(),
-        at::Tensor(), at::Tensor(), grad_inputs, at::Tensor()};
+        at::Tensor(), at::Tensor(), grad_inputs, at::Tensor(), at::Tensor()};
   }
 };
 
@@ -55,10 +56,11 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> trilinear_devoxelize_autograd(
     at::Tensor points_range_max,
     at::Tensor voxel_coords,
     at::Tensor voxel_features,
-    at::Tensor voxel_batch_indices) {
+    at::Tensor voxel_batch_indices,
+    double hash_table_load_factor) {
   auto results = TrilinearDevoxelize::apply(
       points, batch_indices, voxel_size, points_range_min, points_range_max,
-      voxel_coords, voxel_features, voxel_batch_indices);
+      voxel_coords, voxel_features, voxel_batch_indices, hash_table_load_factor);
   return {results[0], results[1], results[2]};
 }
 

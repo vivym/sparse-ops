@@ -24,7 +24,8 @@ void trilinear_devoxelize_impl(
     const at::Tensor& points_range_max,
     const at::Tensor& voxel_coords,
     const at::Tensor& voxel_features,
-    const at::Tensor& voxel_batch_indices) {
+    const at::Tensor& voxel_batch_indices,
+    double hash_table_load_factor) {
   auto stream = at::cuda::getCurrentCUDAStream().stream();
   auto policy = thrust::cuda::par(ThrustAllocator()).on(stream);
 
@@ -36,7 +37,7 @@ void trilinear_devoxelize_impl(
     auto tmp = at::empty({batch_size * num_points}, indices_options);
     sparse_ops::thrust_impl::generate_batch_indices<index_t>(
         policy, tmp.data_ptr<index_t>(), batch_size, num_points);
-    batch_indices.value() = tmp;
+    batch_indices = tmp;
   }
 
   auto num_points = batch_indices.value().size(0);
@@ -77,45 +78,29 @@ void trilinear_devoxelize_impl(
   auto invalid_key = std::numeric_limits<key_type>::max();
   auto invalid_value = std::numeric_limits<value_type>::max();
 
-  constexpr double load_factor = 0.9;
-  std::size_t capacity = static_cast<double>(num_voxels) / load_factor;
-
-  printf("#1 %d\n", (int)capacity);
+  std::size_t capacity = static_cast<double>(num_voxels) / hash_table_load_factor;
 
   HashTable table(capacity, invalid_key, invalid_value);
 
   {
     ThrustVector<bght::pair<key_type, value_type>> kv_pairs_vec(num_voxels);
-
-    printf("#2\n");
-
     thrust_impl::compute_hash_table_kv_pairs<index_t, 3>(
         policy, kv_pairs_vec.data().get(), voxel_coords_ptr, voxel_batch_indices_ptr,
         num_voxels, batch_stride, voxel_strides);
 
-    printf("#3\n");
-
     TORCH_CHECK(table.insert(kv_pairs_vec.begin(), kv_pairs_vec.end(), stream));
   }
-
-  printf("#4\n");
 
   thrust_impl::compute_hash_table_queries_and_weights<scalar_t, index_t, 3>(
       policy, indices_ptr, weights_ptr, point_coords_ptr, batch_indices_ptr,
       num_points, voxel_size_vec, points_range_min_vec,
       batch_stride, voxel_strides, voxel_extents);
 
-  printf("#5\n");
-
   table.find(indices_ptr, indices_ptr + num_points * 8, indices_ptr, stream);
-
-  printf("#6\n");
 
   thrust_impl::trilinear_interpolate(
       policy, point_features_ptr, indices_ptr, weights_ptr,
       voxel_features_ptr, num_points, num_channels, invalid_value);
-
-  printf("#7\n");
 }
 
 std::tuple<at::Tensor, at::Tensor, at::Tensor> trilinear_devoxelize(
@@ -126,7 +111,8 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> trilinear_devoxelize(
     at::Tensor points_range_max,
     at::Tensor voxel_coords,
     at::Tensor voxel_features,
-    at::Tensor voxel_batch_indices) {
+    at::Tensor voxel_batch_indices,
+    double hash_table_load_factor) {
   TORCH_CHECK(points.is_cuda(), "The point_coords must be a CUDA tensor.");
   if (batch_indices.has_value()) {
     TORCH_CHECK(batch_indices.value().is_cuda(),
@@ -160,12 +146,10 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> trilinear_devoxelize(
   }
 
   AT_DISPATCH_FLOATING_TYPES_AND_HALF(points.type(), "sparse_ops::devoxelize::cuda::trilinear_devoxelize", [&] {
-    if (batch_indices.has_value()) {
-      trilinear_devoxelize_impl<scalar_t, int64_t>(
-          point_features, indices, weights, points, batch_indices,
-          voxel_size, points_range_min, points_range_max,
-          voxel_coords, voxel_features, voxel_batch_indices);
-    }
+    trilinear_devoxelize_impl<scalar_t, int64_t>(
+        point_features, indices, weights, points, batch_indices,
+        voxel_size, points_range_min, points_range_max,
+        voxel_coords, voxel_features, voxel_batch_indices, hash_table_load_factor);
   });
 
   return {point_features, indices, weights};

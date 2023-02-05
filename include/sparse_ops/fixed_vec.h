@@ -115,6 +115,24 @@ FN_SPECIFIERS FixedVec<double, kDim> ceil(const FixedVec<double, kDim>& v) {
   return res;
 }
 
+template <std::size_t kDim>
+FN_SPECIFIERS FixedVec<float, kDim> round(const FixedVec<float, kDim>& v) {
+  FixedVec<float, kDim> res;
+  for (std::size_t i = 0; i < kDim; ++i) {
+    res[i] = roundf(v[i]);
+  }
+  return res;
+}
+
+template <std::size_t kDim>
+FN_SPECIFIERS FixedVec<double, kDim> round(const FixedVec<double, kDim>& v) {
+  FixedVec<double, kDim> res;
+  for (std::size_t i = 0; i < kDim; ++i) {
+    res[i] = std::round(v[i]);
+  }
+  return res;
+}
+
 #ifdef __CUDACC__
 
 template <std::size_t kDim>
@@ -149,6 +167,15 @@ FN_SPECIFIERS FixedVec<c10::Half, kDim> ceil(const FixedVec<c10::Half, kDim>& v)
   FixedVec<c10::Half, kDim> res;
   for (std::size_t i = 0; i < kDim; ++i) {
     res[i] = hceil(v[i]);
+  }
+  return res;
+}
+
+template <std::size_t kDim>
+FN_SPECIFIERS FixedVec<c10::Half, kDim> round(const FixedVec<c10::Half, kDim>& v) {
+  FixedVec<c10::Half, kDim> res;
+  for (std::size_t i = 0; i < kDim; ++i) {
+    res[i] = hrint(v[i]);
   }
   return res;
 }

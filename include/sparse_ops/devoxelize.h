@@ -13,7 +13,8 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> trilinear_devoxelize(
     at::Tensor points_range_max,
     at::Tensor voxel_coords,
     at::Tensor voxel_features,
-    at::Tensor voxel_batch_indices);
+    at::Tensor voxel_batch_indices,
+    double hash_table_load_factor);
 
 at::Tensor trilinear_devoxelize_backward(
     const at::Tensor& grad_outputs,
@@ -31,7 +32,8 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> trilinear_devoxelize(
     at::Tensor points_range_max,
     at::Tensor voxel_coords,
     at::Tensor voxel_features,
-    at::Tensor voxel_batch_indices);
+    at::Tensor voxel_batch_indices,
+    double hash_table_load_factor);
 
 at::Tensor trilinear_devoxelize_backward(
     const at::Tensor& grad_outputs,
@@ -51,7 +53,8 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> trilinear_devoxelize_autograd(
     at::Tensor points_range_max,
     at::Tensor voxel_coords,
     at::Tensor voxel_features,
-    at::Tensor voxel_batch_indices);
+    at::Tensor voxel_batch_indices,
+    double hash_table_load_factor);
 
 }
 

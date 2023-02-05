@@ -11,7 +11,8 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> trilinear_devoxelize(
     at::Tensor points_range_max,
     at::Tensor voxel_coords,
     at::Tensor voxel_features,
-    at::Tensor voxel_batch_indices) {
+    at::Tensor voxel_batch_indices,
+    double hash_table_load_factor) {
   if (batch_indices.has_value()) {
     TORCH_CHECK(points.dim() == 2, "The points must be a 2D tensor.");
     TORCH_CHECK(batch_indices.value().dim() == 1,
@@ -48,7 +49,7 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> trilinear_devoxelize(
                        .typed<decltype(trilinear_devoxelize)>();
   return op.call(
       points, batch_indices, voxel_size, points_range_min, points_range_max,
-      voxel_coords, voxel_features, voxel_batch_indices);
+      voxel_coords, voxel_features, voxel_batch_indices, hash_table_load_factor);
 }
 
 at::Tensor trilinear_devoxelize_backward(
@@ -61,10 +62,10 @@ at::Tensor trilinear_devoxelize_backward(
               "The grad_outputs must be a 2D or 3D tensor.");
 
   TORCH_CHECK(indices.is_contiguous(), "The indices must be a contiguous tensor.");
-  TORCH_CHECK(indices.dim() == 2, "The indices must be a 2D tensor.");
+  TORCH_CHECK(indices.dim() == grad_outputs.dim(), "The indices must be a 2D or 3D tensor.");
 
   TORCH_CHECK(weights.is_contiguous(), "The weights must be a contiguous tensor.");
-  TORCH_CHECK(weights.dim() == 2, "The weights must be a 2D tensor.");
+  TORCH_CHECK(weights.dim() == grad_outputs.dim(), "The weights must be a 2D or 3D tensor.");
 
   static auto op = c10::Dispatcher::singleton()
                        .findSchemaOrThrow("sparse_ops::trilinear_devoxelize_backward", "")
@@ -76,8 +77,8 @@ TORCH_LIBRARY_FRAGMENT(sparse_ops, m) {
   m.def(TORCH_SELECTIVE_SCHEMA(
       "sparse_ops::trilinear_devoxelize(Tensor points, Tensor? batch_indices, "
       "Tensor voxel_size, Tensor points_range_min, Tensor points_range_max, "
-      "Tensor voxel_coords, Tensor voxel_features, Tensor voxel_batch_indices) "
-      "-> (Tensor, Tensor, Tensor)"));
+      "Tensor voxel_coords, Tensor voxel_features, Tensor voxel_batch_indices, "
+      "float hash_table_load_factor) -> (Tensor, Tensor, Tensor)"));
   m.def(TORCH_SELECTIVE_SCHEMA(
       "sparse_ops::trilinear_devoxelize_backward(Tensor grad_outputs, "
       "Tensor indices, Tensor weights, int num_voxels) -> Tensor"));

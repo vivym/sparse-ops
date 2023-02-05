@@ -37,7 +37,7 @@ void compute_voxel_coords_and_indices(
         FixedVec<scalar_t, kDim> p;
         p.load(points_ptr + i * kDim);
         if ((p >= points_range_min && p <= points_range_max).all()) {
-          auto voxel_coord = ((p - points_range_min) / voxel_size)
+          auto voxel_coord = round((p - points_range_min) / voxel_size)
                                   .template cast<index_t>();
           auto voxel_index = batch_indices_ptr[i] * batch_stride +
                              voxel_coord.dot(voxel_strides);

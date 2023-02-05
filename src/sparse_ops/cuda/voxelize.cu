@@ -21,6 +21,10 @@ void voxelize_impl(
   auto stream = at::cuda::getCurrentCUDAStream().stream();
   auto policy = thrust::cuda::par(ThrustAllocator()).on(stream);
 
+  auto num_points = batch_indices.has_value()
+                  ? points.size(0)
+                  : points.size(0) * points.size(1);
+
   auto voxel_coords_ptr = voxel_coords.data_ptr<index_t>();
   auto voxel_indices_ptr = voxel_indices.data_ptr<index_t>();
   auto voxel_batch_indices_ptr = voxel_batch_indices.data_ptr<index_t>();
@@ -34,13 +38,13 @@ void voxelize_impl(
     auto tmp = at::empty({batch_size, num_points}, indices_options);
     sparse_ops::thrust_impl::generate_batch_indices<index_t>(
         policy, tmp.data_ptr<index_t>(), batch_size, num_points);
-    batch_indices.value() = tmp;
+    batch_indices = tmp;
   }
 
   const auto* const points_ptr = points.data_ptr<scalar_t>();
   const auto* const batch_indices_ptr = batch_indices.value().data_ptr<index_t>();
 
-  switch (points.size(1)) {
+  switch (points.size(-1)) {
 #define CASE(NDIM)                                                        \
   case NDIM: {                                                            \
     FixedVec<scalar_t, NDIM> voxel_size_vec;                              \
@@ -52,7 +56,7 @@ void voxelize_impl(
     auto num_voxels = thrust_impl::voxelize<scalar_t, index_t, NDIM>(     \
         policy, voxel_coords_ptr, voxel_indices_ptr,                      \
         voxel_batch_indices_ptr, voxel_point_indices_ptr,                 \
-        points_ptr, batch_indices_ptr, points.size(0),                    \
+        points_ptr, batch_indices_ptr, num_points,                        \
         voxel_size_vec, points_range_min_vec, points_range_max_vec);      \
     voxel_coords = voxel_coords.slice(0, 0, num_voxels);                  \
     voxel_batch_indices = voxel_batch_indices.slice(0, 0, num_voxels);    \

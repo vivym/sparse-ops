@@ -72,14 +72,6 @@ void compute_hash_table_queries_and_weights(
         const auto wgt110 = d_1[0] * d_1[1] * d_0[2];
         const auto wgt111 = d_1[0] * d_1[1] * d_1[2];
 
-        printf("p: %f, %f, %f; p_lo: %f, %f, %f; p_hi: %f, %f, %f\n",
-               (float)p[0], (float)p[1], (float)p[2],
-               (float)p_lo[0], (float)p_lo[1], (float)p_lo[2],
-               (float)p_hi[0], (float)p_hi[1], (float)p_hi[2]);
-        printf("d_0: %f, %f, %f; d_1: %f, %f, %f\n",
-               (float)d_0[0], (float)d_0[1], (float)d_0[2],
-               (float)d_1[0], (float)d_1[1], (float)d_1[2]);
-
         weights_ptr[i * 8 + 0] = wgt000;
         weights_ptr[i * 8 + 1] = wgt001;
         weights_ptr[i * 8 + 2] = wgt010;
