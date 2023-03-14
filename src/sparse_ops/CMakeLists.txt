@@ -23,7 +23,7 @@ target_link_libraries(${MODULE_NAME} PRIVATE
   ${TORCH_LIBRARIES}
   ${TORCH_PYTHON_LIBRARY}
   CUDA::cublas
-  bght
+  cuco
 )
 
 target_compile_options(${MODULE_NAME} PRIVATE

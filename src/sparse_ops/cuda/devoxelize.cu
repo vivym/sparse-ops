@@ -1,7 +1,8 @@
 #include <torch/script.h>
 #include <thrust/execution_policy.h>
 #include <thrust/device_vector.h>
-#include <bcht.hpp>
+#include <cuco/static_map.cuh>
+#include <cuda/std/atomic>
 #include "sparse_ops/devoxelize.h"
 #include "sparse_ops/thrust/devoxelize.hpp"
 #include "sparse_ops/thrust/misc.hpp"
@@ -11,6 +12,45 @@ namespace sparse_ops::devoxelize::cuda {
 
 template <typename T>
 using ThrustVector = thrust::device_vector<T, DeviceVectorAllocator<T>>;
+
+template <typename T>
+class cuda_allocator {
+ public:
+  using value_type = T;  ///< Allocator's value type
+
+  cuda_allocator() = default;
+
+  /**
+   * @brief Copy constructor.
+   */
+  template <class U>
+  cuda_allocator(cuda_allocator<U> const&) noexcept
+  {
+  }
+
+  /**
+   * @brief Allocates storage for `n` objects of type `T` using `cudaMalloc`.
+   *
+   * @param n The number of objects to allocate storage for
+   * @return Pointer to the allocated storage
+   */
+  value_type* allocate(std::size_t n)
+  {
+    return reinterpret_cast<value_type*>(
+        c10::cuda::CUDACachingAllocator::raw_alloc(n));
+  }
+
+  /**
+   * @brief Deallocates storage pointed to by `p`.
+   *
+   * @param p Pointer to memory to deallocate
+   */
+  // void deallocate(value_type* p, std::size_t) { CUCO_CUDA_TRY(cudaFree(p)); }
+
+  void deallocate(value_type* p, std::size_t) {
+    c10::cuda::CUDACachingAllocator::raw_delete(p);
+  }
+};
 
 template <typename scalar_t, typename index_t>
 void trilinear_devoxelize_impl(
@@ -73,22 +113,22 @@ void trilinear_devoxelize_impl(
 
   using key_type = index_t;
   using value_type = index_t;
-  using HashTable = bght::bcht<key_type, value_type>;
 
   auto invalid_key = std::numeric_limits<key_type>::max();
   auto invalid_value = std::numeric_limits<value_type>::max();
 
   std::size_t capacity = static_cast<double>(num_voxels) / hash_table_load_factor;
 
-  HashTable table(capacity, invalid_key, invalid_value);
+  cuco::static_map<key_type, value_type, ::cuda::thread_scope_device, cuda_allocator<char>> map{
+    capacity, cuco::empty_key{invalid_key}, cuco::empty_value{invalid_value}};
 
   {
-    ThrustVector<bght::pair<key_type, value_type>> kv_pairs_vec(num_voxels);
+    ThrustVector<thrust::tuple<key_type, value_type>> kv_pairs_vec(num_voxels);
     thrust_impl::compute_hash_table_kv_pairs<index_t, 3>(
         policy, kv_pairs_vec.data().get(), voxel_coords_ptr, voxel_batch_indices_ptr,
         num_voxels, batch_stride, voxel_strides);
 
-    TORCH_CHECK(table.insert(kv_pairs_vec.begin(), kv_pairs_vec.end(), stream));
+    map.insert(kv_pairs_vec.begin(), kv_pairs_vec.end());
   }
 
   thrust_impl::compute_hash_table_queries_and_weights<scalar_t, index_t, 3>(
@@ -96,7 +136,7 @@ void trilinear_devoxelize_impl(
       num_points, voxel_size_vec, points_range_min_vec,
       batch_stride, voxel_strides, voxel_extents);
 
-  table.find(indices_ptr, indices_ptr + num_points * 8, indices_ptr, stream);
+  map.find(indices_ptr, indices_ptr + num_points * 8, indices_ptr);
 
   thrust_impl::trilinear_interpolate(
       policy, point_features_ptr, indices_ptr, weights_ptr,
@@ -114,10 +154,50 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> trilinear_devoxelize(
     at::Tensor voxel_batch_indices,
     double hash_table_load_factor) {
   TORCH_CHECK(points.is_cuda(), "The point_coords must be a CUDA tensor.");
+  TORCH_CHECK(points.is_contiguous(), "The points must be a contiguous tensor.");
+
   if (batch_indices.has_value()) {
+    TORCH_CHECK(points.dim() == 2, "The points must be a 2D tensor.");
+    TORCH_CHECK(batch_indices.value().dim() == 1,
+                "The batch_indices must be a 1D tensor.");
     TORCH_CHECK(batch_indices.value().is_cuda(),
                 "The batch_indices must be a CUDA tensor.");
+    TORCH_CHECK(batch_indices.value().is_contiguous(),
+                "The batch_indices must be a contiguous tensor.");
+  } else {
+    TORCH_CHECK(points.dim() == 3, "The points must be a 3D tensor.");
   }
+
+  TORCH_CHECK(0 < points.size(-1) && points.size(-1) < 9,
+              "The number of dimensions must be in [1, ..., 8].");
+  TORCH_CHECK(voxel_size.size(0) == points.size(-1),
+              "The number of dimensions of voxel_size is invalid.");
+  TORCH_CHECK(points_range_min.size(0) == points.size(-1),
+              "The number of dimensions of points_range_min is invalid.");
+  TORCH_CHECK(points_range_max.size(0) == points.size(-1),
+              "The number of dimensions of points_range_max is invalid.");
+
+  TORCH_CHECK(voxel_size.is_cpu(),
+              "The voxel_size must be a cpu tensor.");
+  TORCH_CHECK(points_range_min.is_cpu(),
+              "The points_range_min must be a cpu tensor.");
+  TORCH_CHECK(points_range_max.is_cpu(),
+              "The points_range_max must be a cpu tensor.");
+
+  TORCH_CHECK(voxel_size.dim() == 1,
+              "The voxel_size must be a 1D tensor.");
+  TORCH_CHECK(points_range_min.dim() == 1,
+              "The points_range_min must be a 1D tensor.");
+  TORCH_CHECK(points_range_max.dim() == 1,
+              "The points_range_max must be a 1D tensor.");
+
+  TORCH_CHECK(voxel_size.is_contiguous(),
+              "The voxel_size must be a contiguous tensor.");
+  TORCH_CHECK(points_range_min.is_contiguous(),
+              "The points_range_min must be a contiguous tensor.");
+  TORCH_CHECK(points_range_max.is_contiguous(),
+              "The points_range_max must be a contiguous tensor.");
+
   TORCH_CHECK(voxel_coords.is_cuda(),
               "The voxel_coords must be a CUDA tensor.");
   TORCH_CHECK(voxel_features.is_cuda(),
@@ -125,8 +205,21 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> trilinear_devoxelize(
   TORCH_CHECK(voxel_batch_indices.is_cuda(),
               "The voxel_batch_indices must be a CUDA tensor.");
 
-  auto num_channels = voxel_features.size(-1);
+  TORCH_CHECK(voxel_coords.is_contiguous(),
+              "The voxel_coords must be a contiguous tensor.");
+  TORCH_CHECK(voxel_features.is_contiguous(),
+              "The voxel_features must be a contiguous tensor.");
+  TORCH_CHECK(voxel_batch_indices.is_contiguous(),
+              "The voxel_batch_indices must be a contiguous tensor.");
 
+  TORCH_CHECK(voxel_coords.dim() == 2,
+              "The voxel_coords must be a 2D tensor.");
+  TORCH_CHECK(voxel_features.dim() == 2,
+              "The voxel_features must be a 2D tensor.");
+  TORCH_CHECK(voxel_batch_indices.dim() == 1,
+              "The voxel_batch_indices must be a 1D tensor.");
+
+  auto num_channels = voxel_features.size(-1);
   auto indices_options = voxel_batch_indices.options();
 
   at::Tensor point_features, indices, weights;
@@ -188,6 +281,21 @@ at::Tensor trilinear_devoxelize_backward(
     const at::Tensor& indices,
     const at::Tensor& weights,
     int64_t num_voxels) {
+  TORCH_CHECK(grad_outputs.is_contiguous(),
+              "The grad_outputs must be a contiguous tensor.");
+  TORCH_CHECK(grad_outputs.dim() == 2 || grad_outputs.dim() == 3,
+              "The grad_outputs must be a 2D or 3D tensor.");
+
+  TORCH_CHECK(indices.is_contiguous(),
+              "The indices must be a contiguous tensor.");
+  TORCH_CHECK(indices.dim() == grad_outputs.dim(),
+              "The indices must be a 2D or 3D tensor.");
+
+  TORCH_CHECK(weights.is_contiguous(),
+              "The weights must be a contiguous tensor.");
+  TORCH_CHECK(weights.dim() == grad_outputs.dim(),
+              "The weights must be a 2D or 3D tensor.");
+
   TORCH_CHECK(grad_outputs.is_cuda(), "grad_outputs must be a CUDA tensor");
   TORCH_CHECK(indices.is_cuda(), "indices must be a CUDA tensor");
   TORCH_CHECK(weights.is_cuda(), "weights must be a CUDA tensor");

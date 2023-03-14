@@ -119,7 +119,7 @@ template <std::size_t kDim>
 FN_SPECIFIERS FixedVec<float, kDim> round(const FixedVec<float, kDim>& v) {
   FixedVec<float, kDim> res;
   for (std::size_t i = 0; i < kDim; ++i) {
-    res[i] = roundf(v[i]);
+    res[i] = rintf(v[i]);
   }
   return res;
 }
@@ -128,7 +128,7 @@ template <std::size_t kDim>
 FN_SPECIFIERS FixedVec<double, kDim> round(const FixedVec<double, kDim>& v) {
   FixedVec<double, kDim> res;
   for (std::size_t i = 0; i < kDim; ++i) {
-    res[i] = std::round(v[i]);
+    res[i] = std::rint(v[i]);
   }
   return res;
 }

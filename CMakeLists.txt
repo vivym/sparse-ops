@@ -20,12 +20,13 @@ find_package(CUDAToolkit REQUIRED)
 include(cmake/CPM.cmake)
 
 CPMAddPackage(
-  NAME bght
-  GITHUB_REPOSITORY owensgroup/BGHT
-  GIT_TAG main
+  NAME cuco
+  GITHUB_REPOSITORY NVIDIA/cuCollections
+  GIT_TAG dev
   OPTIONS
-      "build_tests OFF"
-      "build_benchmarks OFF"
+     "BUILD_TESTS OFF"
+     "BUILD_BENCHMARKS OFF"
+     "BUILD_EXAMPLES OFF"
 )
 
 add_subdirectory(src/sparse_ops)

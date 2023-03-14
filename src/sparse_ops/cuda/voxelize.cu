@@ -80,11 +80,49 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor> voxelize(
     at::Tensor points_range_min,
     at::Tensor points_range_max) {
   TORCH_CHECK(points.is_cuda(), "The points must be a CUDA tensor.");
+  TORCH_CHECK(points.is_contiguous(), "The points must be a contiguous tensor.");
 
   if (batch_indices.has_value()) {
-    TORCH_CHECK(batch_indices.value().is_cuda(), "The batch_indices must be a CUDA tensor.");
-    batch_indices.value() = batch_indices.value().contiguous();
+    TORCH_CHECK(points.dim() == 2, "The points must be a 2D tensor.");
+    TORCH_CHECK(batch_indices.value().dim() == 1,
+                "The batch_indices must be a 1D tensor.");
+    TORCH_CHECK(batch_indices.value().is_cuda(),
+                "The batch_indices must be a CUDA tensor.");
+    TORCH_CHECK(batch_indices.value().is_contiguous(),
+                "The batch_indices must be a contiguous tensor.");
+  } else {
+    TORCH_CHECK(points.dim() == 3, "The points must be a 3D tensor.");
   }
+
+  TORCH_CHECK(0 < points.size(-1) && points.size(-1) < 9,
+              "The number of dimensions must be in [1, ..., 8].");
+  TORCH_CHECK(voxel_size.size(0) == points.size(-1),
+              "The number of dimensions of voxel_size is invalid.");
+  TORCH_CHECK(points_range_min.size(0) == points.size(-1),
+              "The number of dimensions of points_range_min is invalid.");
+  TORCH_CHECK(points_range_max.size(0) == points.size(-1),
+              "The number of dimensions of points_range_max is invalid.");
+
+  TORCH_CHECK(voxel_size.is_cpu(),
+              "The voxel_size must be a cpu tensor.");
+  TORCH_CHECK(points_range_min.is_cpu(),
+              "The points_range_min must be a cpu tensor.");
+  TORCH_CHECK(points_range_max.is_cpu(),
+              "The points_range_max must be a cpu tensor.");
+
+  TORCH_CHECK(voxel_size.dim() == 1,
+              "The voxel_size must be a 1D tensor.");
+  TORCH_CHECK(points_range_min.dim() == 1,
+              "The points_range_min must be a 1D tensor.");
+  TORCH_CHECK(points_range_max.dim() == 1,
+              "The points_range_max must be a 1D tensor.");
+
+  TORCH_CHECK(voxel_size.is_contiguous(),
+              "The voxel_size must be a contiguous tensor.");
+  TORCH_CHECK(points_range_min.is_contiguous(),
+              "The points_range_min must be a contiguous tensor.");
+  TORCH_CHECK(points_range_max.is_contiguous(),
+              "The points_range_max must be a contiguous tensor.");
 
   auto num_points = batch_indices.has_value()
                   ? points.size(0)
@@ -100,8 +138,7 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor, at::Tensor> voxelize(
   AT_DISPATCH_FLOATING_TYPES_AND_HALF(points.type(), "sparse_ops::voxelize::cuda::voxelize", [&] {
     voxelize_impl<scalar_t, int64_t>(
         voxel_coords, voxel_indices, voxel_batch_indices, voxel_point_indices,
-        points.contiguous(), batch_indices, voxel_size.contiguous(),
-        points_range_min.contiguous(), points_range_max.contiguous());
+        points, batch_indices, voxel_size, points_range_min, points_range_max);
   });
 
   return {voxel_coords, voxel_indices, voxel_batch_indices, voxel_point_indices};

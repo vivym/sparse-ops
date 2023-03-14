@@ -11,6 +11,9 @@ def reduce_by_key(values: torch.Tensor, keys: torch.Tensor, op: str = "sum") -> 
     else:
         raise NotImplementedError(op)
 
+    values = values.contiguous()
+    keys = keys.contiguous()
+
     return torch.ops.sparse_ops.reduce_by_key(values, keys, op)
 
 

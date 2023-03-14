@@ -95,8 +95,21 @@ void reduce_by_key_impl(
 }
 
 at::Tensor reduce_by_key(at::Tensor values, at::Tensor keys, int64_t op) {
+  TORCH_CHECK(values.is_contiguous(),
+              "The values must be a is_contiguous tensor.");
+  TORCH_CHECK(keys.is_contiguous(),
+              "The keys must be a is_contiguous tensor.");
+
   TORCH_CHECK(values.is_cuda(), "The values must be a CUDA tensor.");
   TORCH_CHECK(keys.is_cuda(), "The keys must be a CUDA tensor.");
+
+  TORCH_CHECK(values.dim() == 2, "The values must be a 2D tensor.");
+  TORCH_CHECK(keys.dim() == 1, "The keys must be a 1D tensor.");
+
+  TORCH_CHECK(0 < values.size(1) && values.size(1) < 9,
+              "The number of channels must be in [1, ..., 8].");
+  TORCH_CHECK(values.size(0) == keys.size(0),
+              "values.size(0) != keys.size(0)");
 
   auto results = at::empty_like(values);
 
