@@ -13,45 +13,6 @@ namespace sparse_ops::devoxelize::cuda {
 template <typename T>
 using ThrustVector = thrust::device_vector<T, DeviceVectorAllocator<T>>;
 
-template <typename T>
-class cuda_allocator {
- public:
-  using value_type = T;  ///< Allocator's value type
-
-  cuda_allocator() = default;
-
-  /**
-   * @brief Copy constructor.
-   */
-  template <class U>
-  cuda_allocator(cuda_allocator<U> const&) noexcept
-  {
-  }
-
-  /**
-   * @brief Allocates storage for `n` objects of type `T` using `cudaMalloc`.
-   *
-   * @param n The number of objects to allocate storage for
-   * @return Pointer to the allocated storage
-   */
-  value_type* allocate(std::size_t n)
-  {
-    return reinterpret_cast<value_type*>(
-        c10::cuda::CUDACachingAllocator::raw_alloc(n));
-  }
-
-  /**
-   * @brief Deallocates storage pointed to by `p`.
-   *
-   * @param p Pointer to memory to deallocate
-   */
-  // void deallocate(value_type* p, std::size_t) { CUCO_CUDA_TRY(cudaFree(p)); }
-
-  void deallocate(value_type* p, std::size_t) {
-    c10::cuda::CUDACachingAllocator::raw_delete(p);
-  }
-};
-
 template <typename scalar_t, typename index_t>
 void trilinear_devoxelize_impl(
     at::Tensor& point_features,
@@ -67,7 +28,7 @@ void trilinear_devoxelize_impl(
     const at::Tensor& voxel_batch_indices,
     double hash_table_load_factor) {
   auto stream = at::cuda::getCurrentCUDAStream().stream();
-  auto policy = thrust::cuda::par(ThrustAllocator()).on(stream);
+  auto policy = thrust::cuda::par(ThrustAllocator<char>()).on(stream);
 
   if (!batch_indices.has_value()) {
     auto batch_size = point_coords.size(0);
@@ -119,8 +80,9 @@ void trilinear_devoxelize_impl(
 
   std::size_t capacity = static_cast<double>(num_voxels) / hash_table_load_factor;
 
-  cuco::static_map<key_type, value_type, ::cuda::thread_scope_device, cuda_allocator<char>> map{
-    capacity, cuco::empty_key{invalid_key}, cuco::empty_value{invalid_value}};
+  cuco::static_map<key_type, value_type, ::cuda::thread_scope_device, ThrustAllocator<char>> map{
+    capacity, cuco::empty_key{invalid_key}, cuco::empty_value{invalid_value},
+    ThrustAllocator<char>{}, stream};
 
   {
     ThrustVector<thrust::tuple<key_type, value_type>> kv_pairs_vec(num_voxels);
@@ -255,7 +217,7 @@ void trilinear_devoxelize_backward_impl(
     const at::Tensor& indices,
     const at::Tensor& weights) {
   auto stream = at::cuda::getCurrentCUDAStream().stream();
-  auto policy = thrust::cuda::par(ThrustAllocator()).on(stream);
+  auto policy = thrust::cuda::par(ThrustAllocator<char>()).on(stream);
 
   int64_t num_points = 0;
   if (grad_outputs.dim() == 3) {

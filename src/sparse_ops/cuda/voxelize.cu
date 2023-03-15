@@ -19,7 +19,7 @@ void voxelize_impl(
     const at::Tensor& points_range_min,
     const at::Tensor& points_range_max) {
   auto stream = at::cuda::getCurrentCUDAStream().stream();
-  auto policy = thrust::cuda::par(ThrustAllocator()).on(stream);
+  auto policy = thrust::cuda::par(ThrustAllocator<char>()).on(stream);
 
   auto num_points = batch_indices.has_value()
                   ? points.size(0)

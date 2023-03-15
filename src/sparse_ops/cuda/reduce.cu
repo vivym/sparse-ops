@@ -50,7 +50,7 @@ template <typename scalar_t, typename index_t>
 void reduce_by_key_impl(
     at::Tensor& results, at::Tensor values, at::Tensor keys, int64_t op) {
   auto stream = at::cuda::getCurrentCUDAStream().stream();
-  auto policy = thrust::cuda::par(ThrustAllocator()).on(stream);
+  auto policy = thrust::cuda::par(ThrustAllocator<char>()).on(stream);
 
   int64_t num_values = values.size(0);
 

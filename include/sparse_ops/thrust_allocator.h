@@ -5,21 +5,27 @@
 
 namespace sparse_ops {
 
-#define UNUSED(x) (void)(x)
-
 /// Allocator for Thrust to re-route its internal device allocations
 /// to the THC allocator
+template <typename T>
 class ThrustAllocator {
 public:
-  using value_type = char;
+  using value_type = T;
 
-  char* allocate(std::size_t n) {
-    return reinterpret_cast<char*>(
-        c10::cuda::CUDACachingAllocator::raw_alloc(n));
+  ThrustAllocator() = default;
+
+  /**
+   * @brief Copy constructor.
+   */
+  template <class U>
+  ThrustAllocator(ThrustAllocator<U> const&) noexcept {}
+
+  value_type* allocate(std::size_t n) {
+    return reinterpret_cast<value_type*>(
+        c10::cuda::CUDACachingAllocator::raw_alloc(sizeof(value_type) * n));
   }
 
-  void deallocate(value_type* p, std::size_t n) {
-    UNUSED(n);
+  void deallocate(value_type* p, std::size_t) {
     c10::cuda::CUDACachingAllocator::raw_delete(p);
   }
 };
@@ -37,12 +43,9 @@ public:
     return pointer(raw_ptr);
   }
 
-  void deallocate(pointer p, size_type n) {
-    UNUSED(n);
+  void deallocate(pointer p, size_type) {
     c10::cuda::CUDACachingAllocator::raw_delete(p.get());
   }
 };
-
-#undef UNUSED
 
 } // namespace sparse_ops

@@ -87,6 +87,10 @@
         "__node_handle": "cpp",
         "__locale": "cpp",
         "ios": "cpp",
-        "__functional_03": "cpp"
+        "__functional_03": "cpp",
+        "__sso_allocator": "c",
+        "regex": "c",
+        "barrier": "c",
+        "latch": "c"
     }
 }
